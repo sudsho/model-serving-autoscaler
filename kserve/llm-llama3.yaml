@@ -1,0 +1,44 @@
+apiVersion: serving.kserve.io/v1beta1
+kind: InferenceService
+metadata:
+  name: llm-llama3-8b
+  namespace: msa
+  annotations:
+    serving.kserve.io/deploymentMode: RawDeployment
+    autoscaling.knative.dev/class: kpa.autoscaling.knative.dev
+    autoscaling.knative.dev/metric: "vllm_running_requests"
+    autoscaling.knative.dev/target: "16"
+    autoscaling.knative.dev/scale-down-delay: "300s"
+spec:
+  predictor:
+    minReplicas: 1
+    maxReplicas: 4
+    containerConcurrency: 8
+    model:
+      modelFormat:
+        name: huggingface
+      runtime: kserve-vllm
+      storageUri: hf://meta-llama/Meta-Llama-3-8B-Instruct
+      args:
+        - --max-model-len=4096
+        - --gpu-memory-utilization=0.85
+        - --enforce-eager=false
+      resources:
+        requests:
+          cpu: "4"
+          memory: 16Gi
+        limits:
+          cpu: "8"
+          memory: 32Gi
+          nvidia.com/gpu: 1
+  transformer:
+    minReplicas: 0
+    maxReplicas: 4
+    containers:
+      - image: ghcr.io/sudsho/msa-transformer:0.1.0
+        name: kserve-container
+        env:
+          - name: TASK
+            value: text
+          - name: PREDICTOR_HOST
+            value: llm-llama3-8b-predictor.msa.svc.cluster.local
