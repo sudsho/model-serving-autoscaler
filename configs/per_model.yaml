@@ -1,0 +1,77 @@
+# per-model serving config
+# applied by scripts/deploy.sh and src/router.py
+#
+# Each model entry maps a logical name -> InferenceService settings.
+# autoscaler block is per-model (KServe respects pod-level annotations).
+
+models:
+
+  sklearn-churn:
+    type: sklearn
+    storage_uri: gs://msa-models/sklearn/churn-v3
+    runtime: kserve-sklearnserver
+    min_replicas: 0
+    max_replicas: 8
+    target_concurrency: 4
+    autoscaler:
+      metric: rps
+      target: 50          # rps per pod
+      scale_down_delay: 60s
+    resources:
+      cpu: "500m"
+      memory: 512Mi
+    canary:
+      enabled: false
+
+  pytorch-resnet50:
+    type: pytorch
+    storage_uri: gs://msa-models/pytorch/resnet50-v2
+    runtime: kserve-torchserve
+    min_replicas: 1       # avoid cold start for image traffic
+    max_replicas: 12
+    target_concurrency: 2
+    autoscaler:
+      metric: concurrency
+      target: 2
+      scale_down_delay: 90s
+    resources:
+      cpu: "2"
+      memory: 4Gi
+      gpu: 1
+    transformer:
+      image: ghcr.io/sudsho/msa-transformer:0.1.0
+      task: image
+    canary:
+      enabled: true
+      promote_threshold:
+        p95_latency_ms: 250
+        error_rate: 0.01
+
+  llm-llama3-8b:
+    type: huggingface
+    storage_uri: hf://meta-llama/Meta-Llama-3-8B-Instruct
+    runtime: kserve-vllm
+    min_replicas: 1
+    max_replicas: 4
+    target_concurrency: 8
+    autoscaler:
+      metric: queue_depth
+      target: 16          # tokens-in-flight per pod
+      scale_down_delay: 300s
+    resources:
+      cpu: "8"
+      memory: 32Gi
+      gpu: 1
+    transformer:
+      image: ghcr.io/sudsho/msa-transformer:0.1.0
+      task: text
+    canary:
+      enabled: true
+      promote_threshold:
+        p95_latency_ms: 2500
+        error_rate: 0.005
+
+routing:
+  default_timeout_ms: 30000
+  fallback_chain:
+    pytorch-resnet50: sklearn-churn  # if image model is down, fall back to a stub
