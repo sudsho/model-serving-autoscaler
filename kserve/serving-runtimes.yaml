@@ -1,0 +1,50 @@
+# Custom ServingRuntime overrides.
+# Default kserve installs sklearnserver/torchserve/vllm runtimes; we
+# pin specific images and tweak default args.
+
+apiVersion: serving.kserve.io/v1alpha1
+kind: ClusterServingRuntime
+metadata:
+  name: kserve-vllm
+spec:
+  supportedModelFormats:
+    - name: huggingface
+      version: "1"
+      autoSelect: true
+  protocolVersions:
+    - v2
+  containers:
+    - name: kserve-container
+      image: kserve/vllmserver:v0.13.0
+      args:
+        - --port=8080
+        - --model=/mnt/models
+        - --served-model-name={{.Name}}
+      ports:
+        - containerPort: 8080
+          protocol: TCP
+
+---
+apiVersion: serving.kserve.io/v1alpha1
+kind: ClusterServingRuntime
+metadata:
+  name: kserve-torchserve
+spec:
+  supportedModelFormats:
+    - name: pytorch
+      version: "1"
+      autoSelect: true
+  protocolVersions:
+    - v2
+    - grpc-v2
+  containers:
+    - name: kserve-container
+      image: pytorch/torchserve-kfs:0.12.0
+      args:
+        - torchserve
+        - --start
+        - --model-store=/mnt/models/model-store
+        - --ts-config=/mnt/models/config/config.properties
+      ports:
+        - containerPort: 8085
+          protocol: TCP
