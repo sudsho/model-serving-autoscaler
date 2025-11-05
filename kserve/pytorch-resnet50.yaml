@@ -1,0 +1,46 @@
+apiVersion: serving.kserve.io/v1beta1
+kind: InferenceService
+metadata:
+  name: pytorch-resnet50
+  namespace: msa
+  annotations:
+    serving.kserve.io/deploymentMode: Serverless
+    autoscaling.knative.dev/class: kpa.autoscaling.knative.dev
+    autoscaling.knative.dev/metric: concurrency
+    autoscaling.knative.dev/target: "2"
+    autoscaling.knative.dev/window: "60s"
+    autoscaling.knative.dev/scale-down-delay: "90s"
+spec:
+  predictor:
+    minReplicas: 1
+    maxReplicas: 12
+    containerConcurrency: 2
+    pytorch:
+      protocolVersion: v2
+      storageUri: gs://msa-models/pytorch/resnet50-v2
+      resources:
+        requests:
+          cpu: "1"
+          memory: 2Gi
+        limits:
+          cpu: "2"
+          memory: 4Gi
+          nvidia.com/gpu: 1
+  transformer:
+    minReplicas: 0
+    maxReplicas: 6
+    containers:
+      - image: ghcr.io/sudsho/msa-transformer:0.1.0
+        name: kserve-container
+        env:
+          - name: TASK
+            value: image
+          - name: PREDICTOR_HOST
+            value: pytorch-resnet50-predictor.msa.svc.cluster.local
+        resources:
+          requests:
+            cpu: "200m"
+            memory: 512Mi
+          limits:
+            cpu: "1"
+            memory: 1Gi

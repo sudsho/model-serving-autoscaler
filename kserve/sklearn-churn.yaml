@@ -1,0 +1,27 @@
+apiVersion: serving.kserve.io/v1beta1
+kind: InferenceService
+metadata:
+  name: sklearn-churn
+  namespace: msa
+  annotations:
+    serving.kserve.io/deploymentMode: Serverless
+    autoscaling.knative.dev/class: kpa.autoscaling.knative.dev
+    autoscaling.knative.dev/metric: rps
+    autoscaling.knative.dev/target: "50"
+    autoscaling.knative.dev/window: "60s"
+    autoscaling.knative.dev/scale-down-delay: "60s"
+spec:
+  predictor:
+    minReplicas: 0
+    maxReplicas: 8
+    containerConcurrency: 4
+    sklearn:
+      protocolVersion: v2
+      storageUri: gs://msa-models/sklearn/churn-v3
+      resources:
+        requests:
+          cpu: "250m"
+          memory: 256Mi
+        limits:
+          cpu: "500m"
+          memory: 512Mi
