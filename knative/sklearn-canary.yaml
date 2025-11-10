@@ -1,0 +1,32 @@
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: sklearn-churn
+  namespace: msa
+spec:
+  template:
+    metadata:
+      annotations:
+        autoscaling.knative.dev/min-scale: "0"
+        autoscaling.knative.dev/max-scale: "8"
+        autoscaling.knative.dev/metric: "rps"
+        autoscaling.knative.dev/target: "50"
+    spec:
+      containerConcurrency: 4
+      containers:
+        - image: kserve/sklearnserver:v0.13.0
+          ports:
+            - containerPort: 8080
+          env:
+            - name: STORAGE_URI
+              value: gs://msa-models/sklearn/churn-v3
+  traffic:
+    - revisionName: sklearn-churn-v3-stable
+      percent: 90
+      tag: stable
+    - revisionName: sklearn-churn-v4-canary
+      percent: 10
+      tag: canary
+    - latestRevision: true
+      percent: 0
+      tag: latest
