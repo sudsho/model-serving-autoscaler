@@ -1,0 +1,31 @@
+# Header-based A/B split.
+# Uses Knative tag-based routing: clients can hit -stable.example.com or
+# -experimental.example.com directly to bypass the percent split, useful
+# for QA pre-promotion.
+
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: pytorch-resnet50
+  namespace: msa
+spec:
+  template:
+    metadata:
+      annotations:
+        autoscaling.knative.dev/min-scale: "1"
+        autoscaling.knative.dev/max-scale: "12"
+        autoscaling.knative.dev/metric: "concurrency"
+        autoscaling.knative.dev/target: "2"
+    spec:
+      containerConcurrency: 2
+      containers:
+        - image: pytorch/torchserve-kfs:0.12.0
+          ports:
+            - containerPort: 8085
+  traffic:
+    - revisionName: pytorch-resnet50-v2
+      percent: 80
+      tag: stable
+    - revisionName: pytorch-resnet50-v3
+      percent: 20
+      tag: experimental
