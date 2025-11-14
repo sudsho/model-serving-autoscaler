@@ -1,0 +1,53 @@
+# PodMonitor objects so Prometheus picks up:
+# - kserve predictor pods (latency, request count)
+# - vllm pods (token throughput, queue depth)
+# - transformer sidecars (transformer_ms histogram)
+#
+# Assumes the Prometheus operator is installed cluster-wide.
+
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: kserve-predictors
+  namespace: msa
+spec:
+  selector:
+    matchLabels:
+      serving.kserve.io/inferenceservice: ""
+  podMetricsEndpoints:
+    - port: http-usermetric
+      interval: 15s
+      path: /metrics
+  namespaceSelector:
+    matchNames:
+      - msa
+
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: msa-transformers
+  namespace: msa
+spec:
+  selector:
+    matchLabels:
+      app: msa-transformer
+  podMetricsEndpoints:
+    - port: http
+      interval: 10s
+      path: /metrics
+
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: vllm-pods
+  namespace: msa
+spec:
+  selector:
+    matchLabels:
+      runtime: kserve-vllm
+  podMetricsEndpoints:
+    - port: http
+      interval: 15s
+      path: /metrics
