@@ -1,0 +1,38 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: msa-alerts
+  namespace: msa
+spec:
+  groups:
+    - name: msa.latency
+      rules:
+        - alert: HighLatencyP95
+          expr: |
+            histogram_quantile(0.95,
+              sum by(le, model)(rate(msa_request_latency_seconds_bucket[5m]))
+            ) > 1.0
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.model }} p95 over 1s for 10m"
+        - alert: ColdStartStorm
+          expr: sum by(model)(rate(msa_cold_starts_total[2m])) * 60 > 5
+          for: 3m
+          labels:
+            severity: info
+          annotations:
+            summary: "{{ $labels.model }} cold starts > 5/min"
+    - name: msa.errors
+      rules:
+        - alert: ErrorBudgetBurn
+          expr: |
+            sum(rate(msa_requests_total{status!="ok"}[5m]))
+            /
+            sum(rate(msa_requests_total[5m])) > 0.02
+          for: 5m
+          labels:
+            severity: page
+          annotations:
+            summary: "router error rate > 2% for 5m"
