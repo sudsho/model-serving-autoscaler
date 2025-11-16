@@ -20,8 +20,10 @@ from typing import Any
 
 import httpx
 import yaml
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Response
 from pydantic import BaseModel
+
+from . import metrics as M
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -73,6 +75,12 @@ async def list_models() -> dict[str, Any]:
     return {"models": _cfg.get("models", {})}
 
 
+@app.get("/metrics")
+async def metrics() -> Response:
+    payload, ctype = M.render()
+    return Response(content=payload, media_type=ctype)
+
+
 def _kserve_url(model: str) -> str:
     # KServe Serverless: HOST header routes to the right ksvc.
     # We hit the gateway and set Host below.
@@ -89,6 +97,7 @@ async def predict(model: str, req: PredictRequest) -> dict[str, Any]:
     host = f"{model}.{namespace}.example.com"
 
     t0 = time.perf_counter()
+    M.QUEUE_DEPTH.labels(model=model).inc()
     assert _client is not None
     try:
         resp = await _client.post(
@@ -97,18 +106,27 @@ async def predict(model: str, req: PredictRequest) -> dict[str, Any]:
             headers={"Host": host},
         )
     except httpx.HTTPError as e:
+        M.REQUESTS_TOTAL.labels(model=model, status="error").inc()
         # try fallback chain if configured
         fallback = _cfg.get("routing", {}).get("fallback_chain", {}).get(model)
         if fallback is not None:
+            M.FALLBACK_TOTAL.labels(primary=model, fallback=fallback).inc()
             logger.warning("primary %s failed (%s); falling back to %s", model, e, fallback)
             return await predict(fallback, req)  # type: ignore[arg-type]
         raise HTTPException(503, f"predictor unreachable: {e}") from e
+    finally:
+        M.QUEUE_DEPTH.labels(model=model).dec()
 
     if resp.status_code >= 400:
+        M.REQUESTS_TOTAL.labels(model=model, status=str(resp.status_code)).inc()
         raise HTTPException(resp.status_code, resp.text)
 
+    elapsed = time.perf_counter() - t0
+    M.REQUEST_LATENCY.labels(model=model, phase="all", status="ok").observe(elapsed)
+    M.REQUESTS_TOTAL.labels(model=model, status="ok").inc()
+
     out = resp.json()
-    out.setdefault("metadata", {})["router_ms"] = round((time.perf_counter() - t0) * 1000, 2)
+    out.setdefault("metadata", {})["router_ms"] = round(elapsed * 1000, 2)
     out["metadata"]["served_by"] = model
     out["metadata"]["model_type"] = spec.get("type", "unknown")
     return out
