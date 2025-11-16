@@ -1,0 +1,97 @@
+{
+  "uid": "msa-overview",
+  "title": "MSA - Multi-Model Serving Overview",
+  "schemaVersion": 39,
+  "version": 4,
+  "refresh": "10s",
+  "tags": ["kserve", "knative", "msa"],
+  "time": { "from": "now-1h", "to": "now" },
+  "templating": {
+    "list": [
+      {
+        "name": "model",
+        "type": "query",
+        "query": "label_values(msa_requests_total, model)",
+        "datasource": "Prometheus"
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Request rate by model",
+      "type": "timeseries",
+      "datasource": "Prometheus",
+      "targets": [
+        { "expr": "sum by(model)(rate(msa_requests_total[1m]))", "legendFormat": "{{model}}" }
+      ],
+      "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 }
+    },
+    {
+      "id": 2,
+      "title": "p95 router latency",
+      "type": "timeseries",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum by(le, model)(rate(msa_request_latency_seconds_bucket[5m])))",
+          "legendFormat": "{{model}}"
+        }
+      ],
+      "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 }
+    },
+    {
+      "id": 3,
+      "title": "Active replicas (Knative pods)",
+      "type": "timeseries",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "sum by(configuration_name)(knative_serving_revision_request_count) > 0 or vector(0)",
+          "legendFormat": "{{configuration_name}}"
+        }
+      ],
+      "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 }
+    },
+    {
+      "id": 4,
+      "title": "Cold starts per minute",
+      "type": "timeseries",
+      "datasource": "Prometheus",
+      "description": "Spikes here line up with first request after scale-from-zero. Watch this when canary rolls.",
+      "targets": [
+        {
+          "expr": "sum by(model)(rate(msa_cold_starts_total[1m])) * 60",
+          "legendFormat": "{{model}}"
+        }
+      ],
+      "gridPos": { "x": 12, "y": 8, "w": 12, "h": 8 }
+    },
+    {
+      "id": 5,
+      "title": "Fallback rate",
+      "type": "timeseries",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "sum by(primary, fallback)(rate(msa_fallback_total[5m]))",
+          "legendFormat": "{{primary}} -> {{fallback}}"
+        }
+      ],
+      "gridPos": { "x": 0, "y": 16, "w": 12, "h": 8 }
+    },
+    {
+      "id": 6,
+      "title": "vLLM in-flight tokens",
+      "type": "timeseries",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "sum by(pod)(vllm_running_requests)",
+          "legendFormat": "{{pod}}"
+        }
+      ],
+      "gridPos": { "x": 12, "y": 16, "w": 12, "h": 8 }
+    }
+  ]
+}
