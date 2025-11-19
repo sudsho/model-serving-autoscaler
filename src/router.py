@@ -23,7 +23,7 @@ import yaml
 from fastapi import FastAPI, HTTPException, Response
 from pydantic import BaseModel
 
-from . import metrics as M
+from . import cold_start, metrics as M
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -100,11 +100,16 @@ async def predict(model: str, req: PredictRequest) -> dict[str, Any]:
     M.QUEUE_DEPTH.labels(model=model).inc()
     assert _client is not None
     try:
-        resp = await _client.post(
+        resp = await cold_start.with_retry(
+            _client,
+            "POST",
             _kserve_url(model),
             json=req.dict(),
             headers={"Host": host},
+            retries=1,
         )
+        if cold_start.is_cold_response(resp):
+            M.COLD_STARTS.labels(model=model).inc()
     except httpx.HTTPError as e:
         M.REQUESTS_TOTAL.labels(model=model, status="error").inc()
         # try fallback chain if configured
