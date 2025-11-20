@@ -1,0 +1,46 @@
+# Per-model autoscaler tuning. KServe surfaces three knobs we care about:
+#   metric:  rps | concurrency | <custom>
+#   target:  per-pod target value
+#   panic-window-percentage: 10 (default 10) - lower = react faster
+#
+# llm-llama3-8b uses a custom metric (vllm_running_requests) that the
+# Knative autoscaler picks up from Prometheus via the KEDA bridge.
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: config-autoscaler
+  namespace: knative-serving
+data:
+  # global tuning, overridden per-revision via annotations
+  enable-scale-to-zero: "true"
+  scale-to-zero-grace-period: "30s"
+  scale-to-zero-pod-retention-period: "10s"
+  stable-window: "60s"
+  panic-window-percentage: "10.0"
+  panic-threshold-percentage: "200.0"
+  max-scale-up-rate: "1000.0"
+  max-scale-down-rate: "2.0"
+
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: llm-llama3-keda
+  namespace: msa
+spec:
+  scaleTargetRef:
+    apiVersion: serving.knative.dev/v1
+    kind: Service
+    name: llm-llama3-8b
+  minReplicaCount: 1
+  maxReplicaCount: 4
+  cooldownPeriod: 300
+  triggers:
+    - type: prometheus
+      metadata:
+        serverAddress: http://prometheus.monitoring.svc:9090
+        metricName: vllm_running_requests
+        threshold: "16"
+        query: |
+          sum by(pod)(vllm_running_requests{namespace="msa", deployment="llm-llama3-8b"})
