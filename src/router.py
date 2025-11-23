@@ -104,7 +104,7 @@ async def predict(model: str, req: PredictRequest) -> dict[str, Any]:
             _client,
             "POST",
             _kserve_url(model),
-            json=req.dict(),
+            json=req.model_dump(),
             headers={"Host": host},
             retries=1,
         )
