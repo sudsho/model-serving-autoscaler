@@ -1,0 +1,15 @@
+# Staging overlay applied on top of per_model.yaml when DEPLOY_ENV=staging.
+# Smaller resource caps so it fits on a single-node dev cluster.
+
+models:
+  sklearn-churn:
+    max_replicas: 2
+    resources: { cpu: "200m", memory: 256Mi }
+  pytorch-resnet50:
+    min_replicas: 0
+    max_replicas: 2
+    resources: { cpu: "1", memory: 2Gi }
+  llm-llama3-8b:
+    # use a smaller model in staging
+    storage_uri: hf://meta-llama/Meta-Llama-3.2-1B-Instruct
+    max_replicas: 1

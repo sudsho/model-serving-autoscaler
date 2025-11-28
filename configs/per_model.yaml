@@ -73,5 +73,14 @@ models:
 
 routing:
   default_timeout_ms: 30000
+  cold_start_retries: 1
+  cold_start_base_delay_ms: 300
+  warmer:
+    enabled: false
+    interval_s: 90
   fallback_chain:
     pytorch-resnet50: sklearn-churn  # if image model is down, fall back to a stub
+  rate_limit:
+    sklearn-churn: 2000   # rps cap before router 429s
+    pytorch-resnet50: 250
+    llm-llama3-8b: 60
