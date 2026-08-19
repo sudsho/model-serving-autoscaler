@@ -1,4 +1,4 @@
-.PHONY: install lint test deploy bench clean
+.PHONY: install lint test smoke deploy bench clean
 
 install:
 	pip install -r requirements.txt
@@ -8,6 +8,11 @@ lint:
 
 test:
 	pytest tests
+
+# Offline end-to-end smoke: boots the router in-process against a synthetic
+# predictor and simulates the autoscaler control loop. No cluster/GPU/network.
+smoke:
+	python scripts/smoke.py
 
 deploy:
 	bash scripts/deploy.sh
